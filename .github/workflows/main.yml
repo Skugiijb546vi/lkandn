@@ -6,7 +6,7 @@ on:
         description: 'لینکی ڤیدیۆکە (بە تۆکنەکەیەوە)'
         required: true
       subtitle_url:
-        description: 'لینکی فایلی ژێرنووسەکە (دەبێت کۆتاییەکەی .srt بێت)'
+        description: 'لینکی فایلی ژێرنووسەکە (.srt یان .vtt)'
         required: true
       file_name:
         description: 'ناوی فایلی کۆتایی لەناو Hugging Face (بۆ نمونە: movie.mp4)'
@@ -35,14 +35,23 @@ jobs:
             --add-header "Origin: ${{ inputs.referer_url }}" \
             -o "input_video.mp4" "${{ inputs.video_url }}"
 
-      - name: 📝 Download Subtitle (SRT)
+      - name: 📝 Download Subtitle (SRT or VTT)
         run: |
-          curl -L -o "subtitle.srt" "${{ inputs.subtitle_url }}"
+          SUB_URL="${{ inputs.subtitle_url }}"
+          if [[ "$SUB_URL" == *".vtt"* ]]; then
+            echo "🔎 فایلی VTT دۆزرایەوە"
+            curl -L -o "subtitle.vtt" "$SUB_URL"
+            echo "SUB_FILE=subtitle.vtt" >> $GITHUB_ENV
+          else
+            echo "🔎 فایلی SRT دۆزرایەوە (یان دانراوە وەک بنچینەیی)"
+            curl -L -o "subtitle.srt" "$SUB_URL"
+            echo "SUB_FILE=subtitle.srt" >> $GITHUB_ENV
+          fi
 
       - name: 🎬 Hardsub Video and Subtitle
         run: |
-          # خستنەسەری ژێرنووسەکە بە خێراترین شێوەی پڕۆسێس
-          ffmpeg -i input_video.mp4 -vf subtitles=subtitle.srt -c:v libx264 -preset ultrafast -c:a copy final_video.mp4
+          # لێرەدا خۆکارانە ئەو فایلە بەکاردەهێنێت کە لە هەنگاوی پێشوو دیاریکراوە (vtt یان srt)
+          ffmpeg -i input_video.mp4 -vf subtitles=${{ env.SUB_FILE }} -c:v libx264 -preset ultrafast -c:a copy final_video.mp4
 
       - name: 🚀 Upload to Hugging Face
         env:
