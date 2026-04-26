@@ -21,13 +21,14 @@ jobs:
   hardsub_upload_job:
     runs-on: ubuntu-latest
     steps:
-      - name: 🏗️ Setup Tools
+      - name: 🏗️ Setup Tools & Fonts
         run: |
+          # دابەزاندنی ئامرازەکان و فۆنتی کوردی/عەرەبی بۆ ئەوەی پیتەکان تێک نەچن
           sudo apt-get update -qq
-          sudo apt-get install -y ffmpeg curl -qq
+          sudo apt-get install -y ffmpeg curl fonts-noto -qq
           python -m pip install -U pip yt-dlp huggingface_hub
 
-      - name: ⬇️ Download Video (Bypass 403 Forbidden)
+      - name: ⬇️ Download Video (Bypass 403)
         run: |
           yt-dlp \
             --user-agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36" \
@@ -38,6 +39,7 @@ jobs:
       - name: 📝 Download Subtitle (SRT or VTT)
         run: |
           SUB_URL="${{ inputs.subtitle_url }}"
+          # دیاریکردنی جۆری فایلەکە بە شێوەیەکی ئۆتۆماتیکی
           if [[ "$SUB_URL" == *".vtt"* ]]; then
             echo "🔎 فایلی VTT دۆزرایەوە"
             curl -L -o "subtitle.vtt" "$SUB_URL"
@@ -48,10 +50,10 @@ jobs:
             echo "SUB_FILE=subtitle.srt" >> $GITHUB_ENV
           fi
 
-      - name: 🎬 Hardsub Video and Subtitle
+      - name: 🎬 Hardsub Video (Ultrafast + Kurdish Font)
         run: |
-          # لێرەدا خۆکارانە ئەو فایلە بەکاردەهێنێت کە لە هەنگاوی پێشوو دیاریکراوە (vtt یان srt)
-          ffmpeg -i input_video.mp4 -vf subtitles=${{ env.SUB_FILE }} -c:v libx264 -preset ultrafast -c:a copy final_video.mp4
+          # خستنە سەری ژێرنووسەکە بە فۆنتی Noto Sans Arabic و قەبارەی 24 بۆ ئەوەی بەڕوونی بخوێندرێتەوە
+          ffmpeg -i input_video.mp4 -vf "subtitles=${{ env.SUB_FILE }}:force_style='Fontname=Noto Sans Arabic,Fontsize=24'" -c:v libx264 -preset ultrafast -c:a copy final_video.mp4
 
       - name: 🚀 Upload to Hugging Face
         env:
