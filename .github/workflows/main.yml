@@ -1,0 +1,75 @@
+name: Hardsub_And_Upload_To_HF
+on:
+  workflow_dispatch:
+    inputs:
+      video_url:
+        description: 'لینکی ڤیدیۆکە (بە تۆکنەکەیەوە)'
+        required: true
+      subtitle_url:
+        description: 'لینکی فایلی ژێرنووسەکە (دەبێت کۆتاییەکەی .srt بێت)'
+        required: true
+      file_name:
+        description: 'ناوی فایلی کۆتایی لەناو Hugging Face (بۆ نمونە: movie.mp4)'
+        required: true
+        default: 'movie_hardsubbed.mp4'
+      referer_url:
+        description: 'سەرچاوەی لینکەکە (بۆ تێپەڕاندنی 403 Forbidden)'
+        required: true
+        default: 'https://zedflix.tv/'
+
+jobs:
+  hardsub_upload_job:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 🏗️ Setup Tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y ffmpeg curl -qq
+          python -m pip install -U pip yt-dlp huggingface_hub
+
+      - name: ⬇️ Download Video (Bypass 403 Forbidden)
+        run: |
+          yt-dlp \
+            --user-agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36" \
+            --add-header "Referer: ${{ inputs.referer_url }}" \
+            --add-header "Origin: ${{ inputs.referer_url }}" \
+            -o "input_video.mp4" "${{ inputs.video_url }}"
+
+      - name: 📝 Download Subtitle (SRT)
+        run: |
+          curl -L -o "subtitle.srt" "${{ inputs.subtitle_url }}"
+
+      - name: 🎬 Hardsub Video and Subtitle
+        run: |
+          # خستنەسەری ژێرنووسەکە بە خێراترین شێوەی پڕۆسێس
+          ffmpeg -i input_video.mp4 -vf subtitles=subtitle.srt -c:v libx264 -preset ultrafast -c:a copy final_video.mp4
+
+      - name: 🚀 Upload to Hugging Face
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          FILE_NAME: ${{ inputs.file_name }}
+        run: |
+          python3 -c "
+          import os
+          from huggingface_hub import HfApi
+          
+          token = os.getenv('HF_TOKEN')
+          if not token:
+              print('❌ Error: HF_TOKEN is missing in GitHub Secrets!')
+              exit(1)
+              
+          api = HfApi()
+          repo_id = 'Sarko717227/Ai_SMART'
+          file_name = os.getenv('FILE_NAME', 'movie_hardsubbed.mp4')
+          
+          print(f'📤 Sending to Hugging Face: {file_name}...')
+          
+          api.upload_file(
+              path_or_fileobj='final_video.mp4',
+              path_in_repo=file_name,
+              repo_id=repo_id,
+              repo_type='dataset',
+              token=token
+          )
+          print('✅ Done! Check your Hugging Face repo.')
+          "
