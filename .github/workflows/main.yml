@@ -23,14 +23,12 @@ jobs:
     steps:
       - name: 📂 Checkout Repository
         uses: actions/checkout@v4
-        # ئەم بەشە نوێیە بۆ ئەوەی گیتھەب فۆنتەکەی خۆت (myfont.ttf) بخوێنێتەوە
 
-      - name: 🏗️ Setup Tools & Python Libs
+      - name: 🏗️ Setup Tools
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y ffmpeg curl fontconfig -qq
-          # دابەزاندنی دوو کتێبخانەی نوێ بۆ لکاندنی پیتە کوردییەکان
-          python -m pip install -U pip yt-dlp huggingface_hub arabic-reshaper python-bidi
+          python -m pip install -U pip yt-dlp huggingface_hub
 
       - name: 🔠 Install Custom Font
         run: |
@@ -38,7 +36,6 @@ jobs:
           if [ -f "myfont.ttf" ]; then
             cp myfont.ttf ~/.fonts/
             fc-cache -f -v
-            # ئەم کۆدە بە ئۆتۆماتیکی ناوی ناوەوەی فۆنتەکەت دەدۆزێتەوە
             FONT_NAME=$(fc-scan --format "%{family}\n" myfont.ttf | head -n 1 | awk -F',' '{print $1}')
             echo "FONT_NAME=$FONT_NAME" >> $GITHUB_ENV
             echo "✅ فۆنتەکە ناسێنرا بە ناوی: $FONT_NAME"
@@ -55,7 +52,7 @@ jobs:
             --add-header "Origin: ${{ inputs.referer_url }}" \
             -o "input_video.mp4" "${{ inputs.video_url }}"
 
-      - name: 📝 Download Subtitle (SRT or VTT)
+      - name: 📝 Download Subtitle
         run: |
           SUB_URL="${{ inputs.subtitle_url }}"
           if [[ "$SUB_URL" == *".vtt"* ]]; then
@@ -66,35 +63,8 @@ jobs:
             echo "SUB_FILE=subtitle.srt" >> $GITHUB_ENV
           fi
 
-      - name: 🔧 Fix Kurdish Letters (لکاندنی پیتەکان)
-        run: |
-          python3 -c "
-          import os
-          import arabic_reshaper
-          from bidi.algorithm import get_display
-
-          file_path = os.getenv('SUB_FILE')
-          
-          with open(file_path, 'r', encoding='utf-8') as f:
-              lines = f.readlines()
-
-          with open(file_path, 'w', encoding='utf-8') as f:
-              for line in lines:
-                  # پاراستنی کاتەکان، تەنها دەستکاری وشەکان دەکەین
-                  if '-->' in line or line.strip().isdigit() or line.startswith('WEBVTT') or line.startswith('Kind:') or line.startswith('Language:'):
-                      f.write(line)
-                  elif line.strip() == '':
-                      f.write('\n')
-                  else:
-                      # ڕێکخستن و لکاندنی پیتەکان
-                      reshaped_text = arabic_reshaper.reshape(line.strip())
-                      bidi_text = get_display(reshaped_text)
-                      f.write(bidi_text + '\n')
-          "
-
       - name: 🎬 Hardsub Video
         run: |
-          # بەکارهێنانی فۆنتەکەی خۆت بە شێوەیەکی ئۆتۆماتیکی
           ffmpeg -i input_video.mp4 -vf "subtitles=${{ env.SUB_FILE }}:force_style='Fontname=${{ env.FONT_NAME }},Fontsize=22,MarginV=25'" -c:v libx264 -preset ultrafast -c:a copy final_video.mp4
 
       - name: 🚀 Upload to Hugging Face
